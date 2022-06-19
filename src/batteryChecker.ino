@@ -13,7 +13,7 @@ const int outPIN = 8;
 const int ledPIN = 13;
   
 //const float BatStopV = 3.3; // Lithum
-const float BatStopV = 1.0; // NiMH 
+const float BatStopV = 0.9; // NiMH 
 int btCount = 0;
 
 float batStartV = - 0.1;
@@ -23,6 +23,8 @@ float busvoltage = 0;
 int secondCount = 0;
 int minCount = 0;
 int testCount = 0;
+int lessprintLimit = 180;// ~3 minutes
+int printRequest = lessprintLimit;
 
 unsigned long lasttime = 0;;
 unsigned long lastPeriod =0;
@@ -38,7 +40,7 @@ unsigned long butDownTime;
 int state = 0;
 // the setup routine runs once when you press reset:
 void setup() {
-  Serial.println("#####setup#####");
+  
   pinMode(ledPIN, OUTPUT);
   pinMode(outPIN, OUTPUT);
   pinMode(BtPIN, INPUT);
@@ -50,6 +52,7 @@ void setup() {
  
   // initialize serial communication at 9600 bits per second:
   Serial.begin(9600); 
+  Serial.println("#####setup#####");
 //  Timer1.initialize(1000000);         // initialize timer1, and set one second period 
 //  Timer1.attachInterrupt(timer1Callback);  // attaches callback() as a timer overflow interrupt
     attachInterrupt(digitalPinToInterrupt(BtPIN), btDown, FALLING );
@@ -93,10 +96,12 @@ void cal(){
   busvoltage = ina219.getBusVoltage_V();
   current_mA = ina219.getCurrent_mA();   
   batEndV = busvoltage;
-  Serial.print("Bus Voltage:   "); Serial.print(busvoltage); Serial.println(" V");
-  //Serial.print("Shunt Voltage: "); Serial.print(shuntvoltage); Serial.println(" mV");  
-  Serial.print("Current:       "); Serial.print(current_mA); Serial.println(" mA"); 
-  Serial.println(""); 
+  if(batEndV <= BatStopV){
+    Serial.print("battery volt is too low: ");
+    Serial.println(batEndV);
+    state = 2;
+    done();
+  }  
   
   unsigned long cctime = millis();
   lastPeriod = cctime - lasttime;
@@ -106,12 +111,23 @@ void cal(){
 //  Serial.print("last Period in Sec "); Serial.println(lastPinSec, 4);
 //  Serial.print("last Period in millis "); Serial.println(lastPeriod);
   totalMASec += current_mA*lastPinSec;
-  if(batEndV <= BatStopV){
-    Serial.print("battery volt is too low: ");
-    Serial.println(batEndV);
-    state = 2;
-    done();
-  } 
+  
+  if(printRequest >= lessprintLimit){
+    printRequest = 0;
+    Serial.print("Bus Voltage: "); Serial.print(busvoltage); Serial.print(" V,   ");
+  //Serial.print("Shunt Voltage: "); Serial.print(shuntvoltage); Serial.println(" mV");  
+    Serial.print("Current: "); Serial.print(current_mA); Serial.print(" mA, ");
+    totalAmpMins = totalMASec/60.0;
+    float totalMins = totalSec/60.0;
+    mAHour = totalAmpMins/60.0;
+    mAHourInt = mAHour;      
+    Serial.print(mAHour );  Serial.print( " mA-H in ");  Serial.print(totalMins);  Serial.println( " minutes");
+
+  }
+  printRequest = printRequest + 1;
+  
+  
+  
 }
 void done(){
   digitalWrite(outPIN, LOW); // disconnect load
